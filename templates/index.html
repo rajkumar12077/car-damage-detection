@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoInspect AI | Car Damage Classification & % Calculation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a',
+                        cardBg: '#1e293b',
+                        cardBorder: '#334155',
+                        accentBlue: '#38bdf8',
+                        accentGreen: '#34d399',
+                        accentRed: '#f87171',
+                        accentAmber: '#fbbf24'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+        }
+        .gauge-circle {
+            transition: stroke-dashoffset 0.8s ease-in-out;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        AutoInspect AI
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">CNN From Scratch</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Multi-Class Car & Damage Classification + Damage % Localization</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                {% if is_trained %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Trained Checkpoint Loaded
+                </span>
+                {% else %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-950/80 text-amber-300 border border-amber-800">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                    Scratch Architecture Ready
+                </span>
+                {% endif %}
+
+                <button onclick="toggleModal('guide-modal')" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                    Dataset & Training Guide
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <div class="lg:col-span-5 space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            Vehicle Input Image
+                        </h2>
+                        <span class="text-xs text-slate-500">JPG, PNG, WEBP</span>
+                    </div>
+
+                    <div id="dropzone"
+                         class="border-2 border-dashed border-slate-700 hover:border-cyan-500 rounded-xl p-6 text-center cursor-pointer transition bg-slate-950/50 flex flex-col items-center justify-center min-h-[220px]">
+                        <input type="file" id="file-input" accept="image/*" class="hidden">
+                        
+                        <div id="dropzone-prompt" class="space-y-3">
+                            <div class="w-12 h-12 rounded-full bg-slate-800 text-cyan-400 flex items-center justify-center mx-auto">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                            </div>
+                            <div class="text-sm font-medium text-slate-300">
+                                Drag & drop car image, or <span class="text-cyan-400 underline underline-offset-2">browse</span>
+                            </div>
+                            <p class="text-xs text-slate-500">Upload damaged or intact car photo</p>
+                        </div>
+
+                        <div id="preview-wrapper" class="hidden w-full relative">
+                            <img id="image-preview" src="" alt="Selected vehicle" class="max-h-60 w-auto mx-auto rounded-lg object-contain shadow-md border border-slate-700">
+                            <button id="clear-btn" type="button" class="absolute top-2 right-2 bg-slate-900/80 hover:bg-red-900 text-slate-300 hover:text-white p-1.5 rounded-full backdrop-blur border border-slate-700 transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-slate-800/80">
+                        <label class="block text-xs font-semibold text-slate-400 mb-2">Don't have a car photo right now? Load a synthetic test sample:</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="loadSyntheticSample('scratch')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 transition">
+                                Scratch Test
+                            </button>
+                            <button onclick="loadSyntheticSample('dent')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 transition">
+                                Dent Test
+                            </button>
+                            <button onclick="loadSyntheticSample('major')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 transition">
+                                Collision Test
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-400 font-medium">Grad-CAM Damage Threshold:</span>
+                            <span id="threshold-val" class="font-bold text-cyan-400">0.35</span>
+                        </div>
+                        <input id="threshold-slider" type="range" min="0.15" max="0.75" step="0.05" value="0.35"
+                               class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+                        <p class="text-[11px] text-slate-500">Adjusts the activation cutoff sensitivity for calculating damaged area %.</p>
+                    </div>
+
+                    <button id="inspect-btn" disabled
+                            class="mt-6 w-full py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-2">
+                        <span id="btn-spinner" class="hidden">
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </span>
+                        <span id="btn-text">Run Damage Classification & % Calculation</span>
+                    </button>
+                </div>
+
+                <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Architecture:</span>
+                        <span class="font-mono text-slate-300">Custom Multi-Task CNN (from Scratch)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">External Weights:</span>
+                        <span class="font-mono text-emerald-400">None (0% YOLO / Pretrained)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Inference Device:</span>
+                        <span class="font-mono text-slate-300">{{ device_name }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-7 space-y-6">
+
+                <div id="empty-state" class="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center min-h-[460px]">
+                    <div class="w-16 h-16 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-500 mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-base font-semibold text-slate-300">Inspection Results Pending</h3>
+                    <p class="text-sm text-slate-500 max-w-sm mt-1">Upload a vehicle photograph or select a synthetic test case on the left, then click run inspection.</p>
+                </div>
+
+                <div id="results-panel" class="hidden space-y-6">
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col items-center justify-center relative overflow-hidden">
+                            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Calculated Damage</span>
+                            
+                            <div class="relative w-28 h-28 flex items-center justify-center">
+                                <svg class="w-28 h-28">
+                                    <circle cx="56" cy="56" r="46" stroke="#334155" stroke-width="8" fill="transparent"/>
+                                    <circle id="gauge-circle" class="gauge-circle" cx="56" cy="56" r="46" stroke="#38bdf8" stroke-width="8" stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round" fill="transparent"/>
+                                </svg>
+                                <div class="absolute flex flex-col items-center justify-center">
+                                    <span id="res-damage-pct" class="text-2xl font-black text-white">0%</span>
+                                    <span class="text-[10px] text-slate-400">IMPACT INDEX</span>
+                                </div>
+                            </div>
+
+                            <span id="res-severity-badge" class="mt-2 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-950 text-cyan-400 border border-cyan-800">
+                                Minor
+                            </span>
+                        </div>
+
+                        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+                            <div>
+                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Damage Type</span>
+                                <div id="res-damage-class" class="text-xl font-bold text-white mt-2">Dent</div>
+                            </div>
+                            <div class="mt-4">
+                                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                    <span>Classification Confidence</span>
+                                    <span id="res-damage-conf" class="font-semibold text-cyan-400">92%</span>
+                                </div>
+                                <div class="w-full bg-slate-800 rounded-full h-1.5">
+                                    <div id="res-damage-bar" class="bg-cyan-400 h-1.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+                            <div>
+                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Vehicle Classification</span>
+                                <div id="res-car-class" class="text-xl font-bold text-white mt-2">Sedan</div>
+                            </div>
+                            <div class="mt-4">
+                                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                    <span>Classification Confidence</span>
+                                    <span id="res-car-conf" class="font-semibold text-blue-400">88%</span>
+                                </div>
+                                <div class="w-full bg-slate-800 rounded-full h-1.5">
+                                    <div id="res-car-bar" class="bg-blue-400 h-1.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                                Visual Localization & Damage Map
+                            </h3>
+
+                            <div class="flex bg-slate-800/80 p-1 rounded-xl border border-slate-700 text-xs">
+                                <button onclick="switchView('heatmap')" id="tab-heatmap" class="px-3 py-1 rounded-lg font-medium transition bg-cyan-600 text-white shadow">
+                                    Grad-CAM Heatmap
+                                </button>
+                                <button onclick="switchView('original')" id="tab-original" class="px-3 py-1 rounded-lg font-medium transition text-slate-400 hover:text-white">
+                                    Original
+                                </button>
+                                <button onclick="switchView('mask')" id="tab-mask" class="px-3 py-1 rounded-lg font-medium transition text-slate-400 hover:text-white">
+                                    Damage Mask
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="relative rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-800 min-h-[300px] max-h-[420px]">
+                            <img id="display-image" src="" alt="Damage Inspection Map" class="max-h-[400px] w-auto object-contain">
+                            <div id="view-indicator" class="absolute bottom-3 left-3 bg-slate-900/85 backdrop-blur px-3 py-1 rounded-full text-xs font-medium text-cyan-300 border border-slate-700">
+                                Grad-CAM Spatial Activation Overlay
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 text-xs text-slate-400 pt-2 border-t border-slate-800">
+                            <div>
+                                <span class="text-slate-500">Spatial Damage Area:</span>
+                                <span id="res-area-pct" class="font-bold text-slate-200 ml-1">0%</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500">Regression Head Output:</span>
+                                <span id="res-reg-pct" class="font-bold text-slate-200 ml-1">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                            <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Damage Classification Probabilities</h4>
+                            <div id="damage-breakdown-list" class="space-y-2">
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                            <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Vehicle Type Probabilities</h4>
+                            <div id="car-breakdown-list" class="space-y-2">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                Automated Repair & Severity Assessment
+                            </h4>
+                            <span id="rec-labor" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                                Estimated Labor: 2 - 4 hours
+                            </span>
+                        </div>
+
+                        <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
+                            <div id="rec-action" class="text-sm font-bold text-slate-100">Detailing & Paint Touch-Up</div>
+                            <p id="rec-details" class="text-xs text-slate-400 leading-relaxed">
+                                Cosmetic scratch affecting vehicle body. Surface compound buffing and clear-coat refinishing recommended.
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="guide-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-5 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    How to Train with Your Own Dataset
+                </h3>
+                <button onclick="toggleModal('guide-modal')" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="text-xs text-slate-300 space-y-4 leading-relaxed">
+                <div>
+                    <h4 class="font-semibold text-cyan-300 text-sm mb-1">1. Zero Pretrained Weights / Zero YOLO</h4>
+                    <p class="text-slate-400">The CNN is built purely from scratch using 5 custom convolutional blocks + multi-task classification heads for Car Type, Damage Type, and Damage % Regression.</p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-cyan-300 text-sm mb-1">2. Format A: CSV Annotations (Recommended)</h4>
+                    <p class="text-slate-400 mb-1">Create an <code class="bg-slate-800 px-1 py-0.5 rounded text-cyan-300">annotations.csv</code> file with columns:</p>
+                    <pre class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto">image_path,car_class,damage_class,damage_percent
+data/images/car1.jpg,Sedan,Dent,25.0
+data/images/car2.jpg,SUV,Scratch,12.0
+data/images/car3.jpg,Truck,Major Smash,75.0</pre>
+                    <p class="text-[11px] text-slate-500 mt-1">*Note: <code class="text-slate-400">damage_percent</code> is optional. If omitted, the model utilizes class severity and Grad-CAM area calculation.</p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-cyan-300 text-sm mb-1">3. Format B: Nested Folders</h4>
+                    <p class="text-slate-400 mb-1">Place images inside nested directories:</p>
+                    <pre class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto">dataset/
+  Sedan/
+    Scratch/
+      img1.jpg
+    Dent/
+      img2.jpg
+  SUV/
+    Dent/
+      img3.jpg</pre>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-cyan-300 text-sm mb-1">4. Start Training</h4>
+                    <p class="text-slate-400 mb-1">Run either of the commands in your terminal:</p>
+                    <pre class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto"># Using CSV:
+python train.py --data-csv path/to/annotations.csv --epochs 25
+
+# Using Folder Structure:
+python train.py --data-dir path/to/dataset_folder --epochs 25</pre>
+                    <p class="text-slate-400 mt-2">The training pipeline automatically saves <code class="bg-slate-800 px-1 py-0.5 rounded text-cyan-300">models/best_car_damage_cnn.pth</code> and <code class="bg-slate-800 px-1 py-0.5 rounded text-cyan-300">models/classes.json</code>. Restart the dashboard to run on your newly trained weights!</p>
+                </div>
+            </div>
+
+            <div class="border-t border-slate-800 pt-3 flex justify-end">
+                <button onclick="toggleModal('guide-modal')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition">
+                    Close Guide
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentImageFile = null;
+        let currentBase64 = null;
+        let predictionData = null;
+        let currentView = 'heatmap';
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const dropzonePrompt = document.getElementById('dropzone-prompt');
+        const previewWrapper = document.getElementById('preview-wrapper');
+        const imagePreview = document.getElementById('image-preview');
+        const clearBtn = document.getElementById('clear-btn');
+        const inspectBtn = document.getElementById('inspect-btn');
+        const thresholdSlider = document.getElementById('threshold-slider');
+        const thresholdVal = document.getElementById('threshold-val');
+
+        dropzone.addEventListener('click', (e) => {
+            if (e.target !== clearBtn && !clearBtn.contains(e.target)) {
+                fileInput.click();
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-cyan-500', 'bg-slate-900/60');
+        });
+
+        dropzone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-cyan-500', 'bg-slate-900/60');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-cyan-500', 'bg-slate-900/60');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        clearBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            resetInput();
+        });
+
+        thresholdSlider.addEventListener('input', (e) => {
+            thresholdVal.textContent = e.target.value;
+            if (predictionData && (currentImageFile || currentBase64)) {
+                runInference();
+            }
+        });
+
+        function handleFile(file) {
+            currentImageFile = file;
+            currentBase64 = null;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                dropzonePrompt.classList.add('hidden');
+                previewWrapper.classList.remove('hidden');
+                inspectBtn.disabled = false;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function resetInput() {
+            currentImageFile = null;
+            currentBase64 = null;
+            fileInput.value = '';
+            imagePreview.src = '';
+            previewWrapper.classList.add('hidden');
+            dropzonePrompt.classList.remove('hidden');
+            inspectBtn.disabled = true;
+        }
+
+        async function loadSyntheticSample(type) {
+            try {
+                const res = await fetch(`/api/generate_sample?type=${type}`);
+                const data = await res.json();
+                currentBase64 = data.image_data;
+                currentImageFile = null;
+
+                imagePreview.src = currentBase64;
+                dropzonePrompt.classList.add('hidden');
+                previewWrapper.classList.remove('hidden');
+                inspectBtn.disabled = false;
+
+                runInference();
+            } catch (err) {
+                alert('Failed to load sample: ' + err);
+            }
+        }
+
+        inspectBtn.addEventListener('click', runInference);
+
+        async function runInference() {
+            if (!currentImageFile && !currentBase64) return;
+
+            const btnText = document.getElementById('btn-text');
+            const btnSpinner = document.getElementById('btn-spinner');
+            inspectBtn.disabled = true;
+            btnSpinner.classList.remove('hidden');
+            btnText.textContent = 'Analyzing Vehicle & Calculating %...';
+
+            const formData = new FormData();
+            if (currentImageFile) {
+                formData.append('image', currentImageFile);
+            } else if (currentBase64) {
+                formData.append('image_base64', currentBase64);
+            }
+            formData.append('threshold', thresholdSlider.value);
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    alert(data.error || 'Prediction failed');
+                    return;
+                }
+
+                predictionData = data;
+                renderResults(data);
+
+            } catch (error) {
+                alert('Error running inference: ' + error);
+            } finally {
+                inspectBtn.disabled = false;
+                btnSpinner.classList.add('hidden');
+                btnText.textContent = 'Run Damage Classification & % Calculation';
+            }
+        }
+
+        function renderResults(data) {
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('results-panel').classList.remove('hidden');
+
+            const finalPct = data.damage_calculation.final_percent;
+            document.getElementById('res-damage-pct').textContent = `${finalPct}%`;
+            
+            const circle = document.getElementById('gauge-circle');
+            const offset = 289 - (finalPct / 100) * 289;
+            circle.style.strokeDashoffset = offset;
+
+            const severityBadge = document.getElementById('res-severity-badge');
+            severityBadge.textContent = data.damage_calculation.severity;
+
+            if (finalPct < 5.0) {
+                circle.style.stroke = '#34d399';
+                severityBadge.className = 'mt-2 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800';
+            } else if (finalPct < 20.0) {
+                circle.style.stroke = '#fbbf24';
+                severityBadge.className = 'mt-2 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-950 text-yellow-300 border border-yellow-800';
+            } else if (finalPct < 50.0) {
+                circle.style.stroke = '#fb923c';
+                severityBadge.className = 'mt-2 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-950 text-orange-300 border border-orange-800';
+            } else {
+                circle.style.stroke = '#f87171';
+                severityBadge.className = 'mt-2 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-950 text-red-300 border border-red-800';
+            }
+
+            document.getElementById('res-damage-class').textContent = data.damage_prediction.class;
+            document.getElementById('res-damage-conf').textContent = `${data.damage_prediction.confidence}%`;
+            document.getElementById('res-damage-bar').style.width = `${data.damage_prediction.confidence}%`;
+
+            document.getElementById('res-car-class').textContent = data.car_prediction.class;
+            document.getElementById('res-car-conf').textContent = `${data.car_prediction.confidence}%`;
+            document.getElementById('res-car-bar').style.width = `${data.car_prediction.confidence}%`;
+
+            document.getElementById('res-area-pct').textContent = `${data.damage_calculation.area_percent}%`;
+            document.getElementById('res-reg-pct').textContent = data.damage_calculation.regression_percent !== null ? `${data.damage_calculation.regression_percent}%` : 'N/A';
+
+            switchView(currentView);
+
+            renderProbabilityList('damage-breakdown-list', data.damage_prediction.breakdown, 'bg-cyan-400');
+            renderProbabilityList('car-breakdown-list', data.car_prediction.breakdown, 'bg-blue-400');
+
+            document.getElementById('rec-action').textContent = data.recommendation.action;
+            document.getElementById('rec-details').textContent = data.recommendation.details;
+            document.getElementById('rec-labor').textContent = `Est. Labor: ${data.recommendation.estimated_labor_hours}`;
+        }
+
+        function renderProbabilityList(elementId, items, barColorClass) {
+            const container = document.getElementById(elementId);
+            container.innerHTML = '';
+            items.slice(0, 5).forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'space-y-1';
+                row.innerHTML = `
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300">${item.class}</span>
+                        <span class="text-slate-400 font-mono">${item.prob}%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1">
+                        <div class="${barColorClass} h-1 rounded-full transition-all duration-500" style="width: ${item.prob}%"></div>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function switchView(view) {
+            currentView = view;
+            if (!predictionData) return;
+
+            const displayImg = document.getElementById('display-image');
+            const indicator = document.getElementById('view-indicator');
+
+            ['heatmap', 'original', 'mask'].forEach(v => {
+                const btn = document.getElementById(`tab-${v}`);
+                if (v === view) {
+                    btn.className = 'px-3 py-1 rounded-lg font-medium transition bg-cyan-600 text-white shadow';
+                } else {
+                    btn.className = 'px-3 py-1 rounded-lg font-medium transition text-slate-400 hover:text-white';
+                }
+            });
+
+            if (view === 'heatmap') {
+                displayImg.src = predictionData.images.heatmap;
+                indicator.textContent = 'Grad-CAM Damage Localization Overlay';
+            } else if (view === 'original') {
+                displayImg.src = predictionData.images.original;
+                indicator.textContent = 'Original Input Photo';
+            } else if (view === 'mask') {
+                displayImg.src = predictionData.images.mask;
+                indicator.textContent = 'Isolated Damage Region Mask';
+            }
+        }
+
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.toggle('hidden');
+        }
+    </script>
+</body>
+</html>

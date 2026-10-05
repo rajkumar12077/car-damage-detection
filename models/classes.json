@@ -1,0 +1,19 @@
+{
+    "car_classes": [
+        "Coupe",
+        "Hatchback",
+        "Pickup Truck",
+        "SUV",
+        "Sedan",
+        "Van / Minivan"
+    ],
+    "damage_classes": [
+        "Bumper Damage",
+        "Dent",
+        "Glass Crack / Shatter",
+        "Headlight / Taillight Damage",
+        "Major Smash / Collision",
+        "No Damage",
+        "Scratch"
+    ]
+}
